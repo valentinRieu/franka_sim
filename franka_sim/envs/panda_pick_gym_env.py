@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal, Tuple, Dict
+from typing import Any, Dict, Literal, Tuple
 
 import gymnasium as gym
 import mujoco
@@ -7,7 +7,7 @@ import numpy as np
 from gymnasium import spaces
 
 try:
-    import mujoco_py
+    import mujoco_py  # noqa: F401
 except ImportError as e:
     MUJOCO_PY_IMPORT_ERROR = e
 else:

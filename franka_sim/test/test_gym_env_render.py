@@ -1,11 +1,6 @@
-import time
-
 import gymnasium as gym
-import mujoco
-import mujoco.viewer
+import imageio
 import numpy as np
-
-import franka_sim
 
 env = gym.make("PandaPickCubeVision-v0", render_mode="human", image_obs=True)
 action_spec = env.action_space
@@ -28,6 +23,5 @@ for i in range(200):
     if done:
         obs, info = env.reset()
 
-import imageio
 
 imageio.mimsave("franka_lift_cube_render_test.mp4", frames, fps=20)
