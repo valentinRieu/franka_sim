@@ -222,9 +222,9 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
 
         return obs, rew, terminated, False, {}
 
-    def render(self):
+    def render(self, cameras=1):
         rendered_frames = []
-        for cam_id in self.camera_id:
+        for cam_id in self.camera_id[:cameras]:
             rendered_frames.append(
                 self._viewer.render(render_mode="rgb_array", camera_id=cam_id)
             )
@@ -244,7 +244,7 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
 
         gripper_pos = np.array(
             self._data.ctrl[self._gripper_ctrl_id] / 255, dtype=np.float32
-        )
+        ).reshape(1)
         obs["state"]["panda/gripper_pos"] = gripper_pos
 
         # joint_pos = np.stack(
@@ -267,7 +267,7 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
 
         if self.image_obs:
             obs["images"] = {}
-            obs["images"]["front"], obs["images"]["wrist"] = self.render()
+            obs["images"]["front"], obs["images"]["wrist"] = self.render(cameras=2)
         else:
             block_pos = self._data.sensor("block_pos").data.astype(np.float32)
             obs["state"]["block_pos"] = block_pos
@@ -288,10 +288,65 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         return rew
 
 
+class PandaPickCubeFlattenedGymEnv(PandaPickCubeGymEnv):
+    def __init__(
+        self,
+        action_scale: np.ndarray = np.asarray([0.1, 1]),
+        seed: int = 0,
+        control_dt: float = 0.02,
+        physics_dt: float = 0.002,
+        time_limit: float = 10,
+        render_spec: GymRenderingSpec = GymRenderingSpec(),
+        render_mode: Literal["rgb_array", "human"] = "rgb_array",
+        image_obs: bool = False,
+    ):
+        super().__init__(
+            action_scale,
+            seed,
+            control_dt,
+            physics_dt,
+            time_limit,
+            render_spec,
+            render_mode,
+            image_obs,
+        )
+        if self.image_obs:
+            self.observation_space = gym.spaces.Box(
+                low=0,
+                high=255,
+                shape=(render_spec.height, render_spec.width, 6),
+                dtype=np.uint8,
+            )
+        else:
+            self.observation_space = gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(10,),
+                dtype=np.float32,
+            )
+
+    def _compute_observation(self) -> np.ndarray:
+        obs_dict = super()._compute_observation()
+        if self.image_obs:
+            obs_flat = np.concatenate(
+                [obs_dict["images"]["front"], obs_dict["images"]["wrist"]], axis=-1
+            )
+        else:
+            obs_flat = np.concatenate(
+                [
+                    obs_dict["state"]["panda/tcp_pos"],
+                    obs_dict["state"]["panda/tcp_vel"],
+                    obs_dict["state"]["panda/gripper_pos"],
+                    obs_dict["state"]["block_pos"],
+                ]
+            )
+        return obs_flat
+
+
 if __name__ == "__main__":
     env = PandaPickCubeGymEnv(render_mode="human")
     env.reset()
     for i in range(100):
         env.step(np.random.uniform(-1, 1, 4))
-        env.render()
+        env.render(cameras=2)
     env.close()

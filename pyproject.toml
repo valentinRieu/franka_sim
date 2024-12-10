@@ -1,0 +1,25 @@
+[build-system]
+requires = ["flit_core >= 3.4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "franka_sim"
+description = "Franka arm and Robotiq Gripper simulator written in Mujoco"
+version = "0.0.1"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+  "dm_env",
+  "mujoco==2.3.7",
+  "gymnasium<1.0",
+  "dm-robotics-transformations",
+  "imageio[ffmpeg]",
+  "lxml",
+]
+
+[tool.ruff.lint]
+ignore = ["C901", "E501", "E741", "F402", "F823", "E731"]
+select = ["C", "E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+known-third-party = ["wandb"]
