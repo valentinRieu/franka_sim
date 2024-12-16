@@ -36,11 +36,12 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         render_spec: GymRenderingSpec = GymRenderingSpec(),
         render_mode: Literal["rgb_array", "human"] = "rgb_array",
         image_obs: bool = False,
+        xml_path: Path = _XML_PATH,
     ):
         self._action_scale = action_scale
 
         super().__init__(
-            xml_path=_XML_PATH,
+            xml_path=xml_path,
             seed=seed,
             control_dt=control_dt,
             physics_dt=physics_dt,
@@ -59,6 +60,7 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         self.render_mode = render_mode
         self.camera_id = (0, 1)
         self.image_obs = image_obs
+        self.place_sid = self._model.site("place").id
 
         # Caching.
         self._panda_dof_ids = np.asarray(
@@ -89,6 +91,9 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
                         # "panda/joint_torque": specs.Array(shape=(21,), dtype=np.float32),
                         # "panda/wrist_force": specs.Array(shape=(3,), dtype=np.float32),
                         "block_pos": spaces.Box(
+                            -np.inf, np.inf, shape=(3,), dtype=np.float32
+                        ),
+                        "place_pos": spaces.Box(
                             -np.inf, np.inf, shape=(3,), dtype=np.float32
                         ),
                     }
@@ -164,6 +169,14 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         # Sample a new block position.
         block_xy = np.random.uniform(*_SAMPLING_BOUNDS)
         self._data.jnt("block").qpos[:3] = (*block_xy, self._block_z)
+
+        # Sample new place target position 10 cm above ground
+        place_xy = block_xy
+        # Make sure place target is at least 5 cm away from block_xy
+        while np.linalg.norm(place_xy - block_xy) < 0.05:
+            place_xy = np.random.uniform(*_SAMPLING_BOUNDS)
+        self._model.site_pos[self.place_sid] = (*place_xy, self._block_z + 0.1)
+
         mujoco.mj_forward(self._model, self._data)
 
         # Cache the initial block height.
@@ -268,9 +281,10 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         if self.image_obs:
             obs["images"] = {}
             obs["images"]["front"], obs["images"]["wrist"] = self.render(cameras=2)
-        else:
-            block_pos = self._data.sensor("block_pos").data.astype(np.float32)
-            obs["state"]["block_pos"] = block_pos
+        block_pos = self._data.sensor("block_pos").data.astype(np.float32)
+        obs["state"]["block_pos"] = block_pos
+        place_pos = self._data.sensor("place_pos").data.astype(np.float32)
+        obs["state"]["place_pos"] = place_pos
 
         if self.render_mode == "human":
             self._viewer.render(self.render_mode)
@@ -286,61 +300,6 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         r_lift = np.clip(r_lift, 0.0, 1.0)
         rew = 0.3 * r_close + 0.7 * r_lift
         return rew
-
-
-class PandaPickCubeFlattenedGymEnv(PandaPickCubeGymEnv):
-    def __init__(
-        self,
-        action_scale: np.ndarray = np.asarray([0.1, 1]),
-        seed: int = 0,
-        control_dt: float = 0.02,
-        physics_dt: float = 0.002,
-        time_limit: float = 10,
-        render_spec: GymRenderingSpec = GymRenderingSpec(),
-        render_mode: Literal["rgb_array", "human"] = "rgb_array",
-        image_obs: bool = False,
-    ):
-        super().__init__(
-            action_scale,
-            seed,
-            control_dt,
-            physics_dt,
-            time_limit,
-            render_spec,
-            render_mode,
-            image_obs,
-        )
-        if self.image_obs:
-            self.observation_space = gym.spaces.Box(
-                low=0,
-                high=255,
-                shape=(render_spec.height, render_spec.width, 6),
-                dtype=np.uint8,
-            )
-        else:
-            self.observation_space = gym.spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(10,),
-                dtype=np.float32,
-            )
-
-    def _compute_observation(self) -> np.ndarray:
-        obs_dict = super()._compute_observation()
-        if self.image_obs:
-            obs_flat = np.concatenate(
-                [obs_dict["images"]["front"], obs_dict["images"]["wrist"]], axis=-1
-            )
-        else:
-            obs_flat = np.concatenate(
-                [
-                    obs_dict["state"]["panda/tcp_pos"],
-                    obs_dict["state"]["panda/tcp_vel"],
-                    obs_dict["state"]["panda/gripper_pos"],
-                    obs_dict["state"]["block_pos"],
-                ]
-            )
-        return obs_flat
 
 
 if __name__ == "__main__":

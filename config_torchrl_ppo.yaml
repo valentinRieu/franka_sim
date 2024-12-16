@@ -1,6 +1,6 @@
 # task and env
 env:
-  env_name: PandaPickCubeFlattened-v0
+  env_name: MyFrankaEnv-v0
 
 # collector
 collector:
@@ -13,7 +13,7 @@ logger:
   project_name: torchrl_example_ppo_flattened
   group_name: null
   exp_name: Franka_example
-  test_interval: 1_000_000
+  test_interval: 100_000
   num_test_episodes: 5
   video: True
 

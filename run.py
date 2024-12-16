@@ -3,17 +3,18 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""
-This script reproduces the Proximal Policy Optimization (PPO) Algorithm
-results from Schulman et al. 2017 for the on MuJoCo Environments.
-"""
 import time
+from pathlib import Path
+from typing import Literal
 
+import gymnasium
 import hydra
+import numpy as np
 import torch
 import torch.nn
 import torch.optim
 import tqdm
+from gymnasium.envs.registration import register
 from tensordict import TensorDict
 from tensordict.nn import AddStateIndependentNormalScale, TensorDictModule
 from torchrl._utils import logger as torchrl_logger
@@ -28,9 +29,7 @@ from torchrl.envs import (
     ExplorationType,
     RewardSum,
     StepCounter,
-    ToTensorImage,
     TransformedEnv,
-    VecNorm,
     set_exploration_type,
 )
 from torchrl.envs.libs.gym import GymEnv
@@ -41,26 +40,86 @@ from torchrl.record import VideoRecorder
 from torchrl.record.loggers import generate_exp_name, get_logger
 
 import franka_sim  # noqa: F401
+from franka_sim.envs.panda_pick_gym_env import _XML_PATH, PandaPickCubeGymEnv
+from franka_sim.mujoco_gym_env import GymRenderingSpec
 
 
-def make_env(
-    env_name="PandaPickCubeFlattened-v0", device="cpu", from_pixels: bool = False
-):
+class MyFrankaEnv(PandaPickCubeGymEnv):
+    def __init__(
+        self,
+        action_scale: np.ndarray = np.asarray([0.1, 1]),
+        seed: int = 0,
+        control_dt: float = 0.02,
+        physics_dt: float = 0.002,
+        time_limit: float = 10,
+        render_spec: GymRenderingSpec = GymRenderingSpec(),
+        render_mode: Literal["rgb_array", "human"] = "rgb_array",
+        image_obs: bool = False,
+        xml_path: Path = _XML_PATH,
+    ):
+        super().__init__(
+            action_scale,
+            seed,
+            control_dt,
+            physics_dt,
+            time_limit,
+            render_spec,
+            render_mode,
+            image_obs,
+            xml_path,
+        )
+        # TODO: modify the observation space if you change the _compute_observation function
+        self.observation_space = gymnasium.spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(13,),
+            dtype=np.float32,
+        )
+
+    def _compute_observation(self) -> np.ndarray:
+        obs_dict = super()._compute_observation()
+        # TODO: modify obs if needed
+        # Refer to https://github.com/Jendker/franka_sim/blob/main/franka_sim/envs/panda_pick_gym_env.py
+        obs_flat = np.concatenate(
+            [
+                obs_dict["state"]["panda/tcp_pos"],
+                obs_dict["state"]["panda/tcp_vel"],
+                obs_dict["state"]["panda/gripper_pos"],
+                obs_dict["state"]["block_pos"],
+                obs_dict["state"]["place_pos"],
+            ]
+        )
+        return obs_flat
+
+    def _compute_reward(self) -> float:
+        # TODO: provide reward
+        # An example how to get the positions of the block, TCP (end-effector tip)
+        # and target placing position
+        block_pos = self._data.sensor("block_pos").data  # noqa: F841
+        tcp_pos = self._data.sensor("2f85/pinch_pos").data  # noqa: F841
+        place_pos = self._data.sensor("place_pos").data  # noqa: F841
+
+        raise NotImplementedError
+
+
+register(
+    id="MyFrankaEnv-v0",
+    entry_point=MyFrankaEnv,
+    max_episode_steps=100,
+)
+
+
+def make_env(env_name="MyFrankaEnv-v0", device="cpu", from_pixels: bool = False):
     env = GymEnv(env_name, device=device, from_pixels=from_pixels, pixels_only=False)
     env = TransformedEnv(env)
-    # TODO: Modify the transforms
-    if env.image_obs:
-        # for vision you could consider
-        env.append_transform(ToTensorImage(in_keys=["observation"]))
-    else:
-        # for state you could consider
-        env.append_transform(VecNorm(in_keys=["observation"], decay=0.99999, eps=1e-2))
+    # TODO: add/modify the transforms
     env.append_transform(RewardSum())
     env.append_transform(StepCounter())
     return env
 
 
 def make_ppo_models_state(proof_environment):
+    # TODO: consider changing the parameters
 
     # Define input shape
     input_shape = proof_environment.observation_spec["observation"].shape
@@ -168,8 +227,12 @@ def eval_model(actor, test_env, num_episodes=3):
     return torch.cat(test_rewards, 0).mean()
 
 
-@hydra.main(config_path="", config_name="config_torchrl_ppo", version_base="1.1")
+@hydra.main(config_path="", config_name="config_torchrl_ppo")
 def main(cfg: "DictConfig"):  # noqa: F821
+    # TODO: This provides an example for PPO
+    # Your task is to compare two algorithms on-policy (you can keep PPO) and an off-policy algorithm
+    # You can use the examples from TorchRL to start with implementation of other algorithms:
+    # https://github.com/pytorch/rl/tree/v0.6.0/sota-implementations
 
     device = "cpu" if not torch.cuda.device_count() else "cuda"
     num_mini_batches = cfg.collector.frames_per_batch // cfg.loss.mini_batch_size
