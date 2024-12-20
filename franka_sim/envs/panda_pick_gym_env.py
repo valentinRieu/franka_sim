@@ -1,3 +1,4 @@
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Dict, Literal, Tuple
 
@@ -71,7 +72,6 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         )
         self._gripper_ctrl_id = self._model.actuator("fingers_actuator").id
         self._pinch_site_id = self._model.site("pinch").id
-        self._block_z = self._model.geom("block").size[2]
 
         self.observation_space = gym.spaces.Dict(
             {
@@ -152,6 +152,10 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         )
         self._viewer.render(self.render_mode)
 
+    @cached_property
+    def _default_block_z(self):
+        return self._model.geom("block").size[2]
+
     def reset(
         self, seed=None, **kwargs
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
@@ -168,7 +172,7 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
 
         # Sample a new block position.
         block_xy = np.random.uniform(*_SAMPLING_BOUNDS)
-        self._data.jnt("block").qpos[:3] = (*block_xy, self._block_z)
+        self._data.jnt("block").qpos[:3] = (*block_xy, self._default_block_z)
 
         # Sample new place target position 10 cm above ground
         place_xy = block_xy
