@@ -152,9 +152,9 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         )
         self._viewer.render(self.render_mode)
 
-    @cached_property
-    def _default_block_z(self):
-        return self._model.geom("block").size[2]
+        # Define default block z from the saved geometry
+
+        self._default_block_z = self._model.geom("block").size[2]
 
     def reset(
         self, seed=None, **kwargs
