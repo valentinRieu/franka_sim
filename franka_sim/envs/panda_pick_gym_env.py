@@ -179,7 +179,7 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         # Make sure place target is at least 5 cm away from block_xy
         while np.linalg.norm(place_xy - block_xy) < 0.05:
             place_xy = np.random.uniform(*_SAMPLING_BOUNDS)
-        self._model.site_pos[self.place_sid] = (*place_xy, self._block_z + 0.1)
+        self._model.site_pos[self.place_sid] = (*place_xy, self.default_block_z + 0.1)
 
         mujoco.mj_forward(self._model, self._data)
 
