@@ -154,7 +154,7 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
 
         # Define default block z from the saved geometry
 
-        self._default_block_z = self._model.geom("block").size[2]
+        self.default_block_z = self._model.geom("block").size[2]
 
     def reset(
         self, seed=None, **kwargs
@@ -172,7 +172,7 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
 
         # Sample a new block position.
         block_xy = np.random.uniform(*_SAMPLING_BOUNDS)
-        self._data.jnt("block").qpos[:3] = (*block_xy, self._default_block_z)
+        self._data.jnt("block").qpos[:3] = (*block_xy, self.default_block_z)
 
         # Sample new place target position 10 cm above ground
         place_xy = block_xy
