@@ -182,7 +182,9 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         self._model.site_pos[self.place_sid] = (*place_xy, self.default_block_z + 0.1)
 
         mujoco.mj_forward(self._model, self._data)
+        # Cache the initial block pos
 
+        self._initial_pos = self._data.sensor("block_pos").data
         # Cache the initial block height.
         self._z_init = self._data.sensor("block_pos").data[2]
         self._z_success = self._z_init + 0.2
